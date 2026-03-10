@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 
-const { spawn, execFileSync } = require("child_process");
-const os = require("os");
+const { spawn } = require("child_process");
 
 const args = process.argv.slice(2);
 
@@ -46,23 +45,66 @@ if (args.length === 0) {
   process.exit(1);
 }
 
-// Build the shell command string with proper escaping
-const shellCmd = args
-  .map((a) => (a.includes(" ") || a.includes('"') ? `'${a.replace(/'/g, "'\\''")}'` : a))
-  .join(" ");
-
 console.log(`press-one: Starting "${args.join(" ")}" with ${delay}ms delay`);
 console.log("press-one: Will press 1 every time input is needed.");
 console.log("press-one: Ctrl+C to stop before it's too late.\n");
 
-// Use `script` to allocate a real PTY without native modules.
-// macOS and Linux have different `script` syntax.
-const isDarwin = os.platform() === "darwin";
-const scriptArgs = isDarwin
-  ? ["-q", "/dev/null", "/bin/zsh", "-i", "-c", shellCmd]
-  : ["-qfc", shellCmd, "/dev/null"];
+// Python helper that allocates a real PTY for the child process.
+// The child (e.g. claude) sees a TTY and runs interactively.
+// We read from our piped stdin and forward to the PTY master.
+const pyHelper = `
+import pty, os, sys, select, signal, struct, fcntl, termios
 
-const child = spawn("script", scriptArgs, {
+args = sys.argv[1:]
+pid, fd = pty.fork()
+
+if pid == 0:
+    os.execvp(args[0], args)
+else:
+    # Forward SIGINT to child
+    signal.signal(signal.SIGINT, lambda s, f: os.kill(pid, signal.SIGINT))
+    signal.signal(signal.SIGTERM, lambda s, f: os.kill(pid, signal.SIGTERM))
+
+    # Set stdin to non-blocking
+    import fcntl, os
+    flags = fcntl.fcntl(sys.stdin.fileno(), fcntl.F_GETFL)
+    fcntl.fcntl(sys.stdin.fileno(), fcntl.F_SETFL, flags | os.O_NONBLOCK)
+
+    alive = True
+    while alive:
+        try:
+            rlist, _, _ = select.select([fd, sys.stdin.fileno()], [], [], 0.05)
+        except (ValueError, OSError):
+            break
+        for r in rlist:
+            if r == fd:
+                try:
+                    data = os.read(fd, 16384)
+                    if not data:
+                        alive = False
+                        break
+                    sys.stdout.buffer.write(data)
+                    sys.stdout.buffer.flush()
+                except OSError:
+                    alive = False
+                    break
+            elif r == sys.stdin.fileno():
+                try:
+                    data = os.read(sys.stdin.fileno(), 4096)
+                    if not data:
+                        continue
+                    os.write(fd, data)
+                except OSError:
+                    pass
+
+    try:
+        _, status = os.waitpid(pid, 0)
+        sys.exit(os.WEXITSTATUS(status) if os.WIFEXITED(status) else 1)
+    except ChildProcessError:
+        sys.exit(0)
+`;
+
+const child = spawn("python3", ["-c", pyHelper, ...args], {
   stdio: ["pipe", "inherit", "inherit"],
   env: process.env,
 });
