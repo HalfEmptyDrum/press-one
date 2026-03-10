@@ -1,6 +1,6 @@
 {
   "name": "press-one",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "Automatically presses 1 to accept changes. For the lazy and the brave.",
   "main": "index.js",
   "bin": {
@@ -22,5 +22,8 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/HalfEmptyDrum/press-one.git"
+  },
+  "dependencies": {
+    "node-pty": "^1.1.0"
   }
 }

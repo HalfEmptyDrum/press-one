@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-const { spawn } = require("child_process");
+const pty = require("node-pty");
 
 const args = process.argv.slice(2);
 
@@ -49,30 +49,29 @@ console.log(`press-one: Starting "${args.join(" ")}" with ${delay}ms delay`);
 console.log("press-one: Will press 1 every time input is needed.");
 console.log("press-one: Ctrl+C to stop before it's too late.\n");
 
-const child = spawn(args[0], args.slice(1), {
-  stdio: ["pipe", "inherit", "inherit"],
+const child = pty.spawn(args[0], args.slice(1), {
+  name: "xterm-256color",
+  cols: process.stdout.columns || 80,
+  rows: process.stdout.rows || 24,
   env: process.env,
+});
+
+child.onData((data) => {
+  process.stdout.write(data);
 });
 
 const interval = setInterval(() => {
   try {
-    child.stdin.write("1\n");
+    child.write("1");
   } catch {
-    // child is gone, clean up
     clearInterval(interval);
   }
 }, delay);
 
-child.on("error", (err) => {
+child.onExit(({ exitCode }) => {
   clearInterval(interval);
-  console.error(`press-one: Failed to start command: ${err.message}`);
-  process.exit(1);
-});
-
-child.on("close", (code) => {
-  clearInterval(interval);
-  console.log(`\npress-one: Command exited with code ${code}`);
-  process.exit(code ?? 0);
+  console.log(`\npress-one: Command exited with code ${exitCode}`);
+  process.exit(exitCode ?? 0);
 });
 
 process.on("SIGINT", () => {
@@ -84,3 +83,9 @@ process.on("SIGTERM", () => {
   clearInterval(interval);
   child.kill("SIGTERM");
 });
+
+if (process.stdout.isTTY) {
+  process.stdout.on("resize", () => {
+    child.resize(process.stdout.columns, process.stdout.rows);
+  });
+}
