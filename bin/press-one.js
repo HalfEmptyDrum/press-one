@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
-const pty = require("node-pty");
-const { execFileSync } = require("child_process");
+const { spawn, execFileSync } = require("child_process");
+const os = require("os");
 
 const args = process.argv.slice(2);
 
@@ -46,42 +46,47 @@ if (args.length === 0) {
   process.exit(1);
 }
 
-// Resolve command to full path since node-pty doesn't search PATH
-let command = args[0];
-try {
-  command = execFileSync("which", [args[0]], { encoding: "utf8" }).trim();
-} catch {
-  console.error(`press-one: Command not found: ${args[0]}`);
-  process.exit(1);
-}
+// Build the shell command string with proper escaping
+const shellCmd = args
+  .map((a) => (a.includes(" ") || a.includes('"') ? `'${a.replace(/'/g, "'\\''")}'` : a))
+  .join(" ");
 
 console.log(`press-one: Starting "${args.join(" ")}" with ${delay}ms delay`);
 console.log("press-one: Will press 1 every time input is needed.");
 console.log("press-one: Ctrl+C to stop before it's too late.\n");
 
-const child = pty.spawn(command, args.slice(1), {
-  name: "xterm-256color",
-  cols: process.stdout.columns || 80,
-  rows: process.stdout.rows || 24,
-  env: process.env,
-});
+// Use `script` to allocate a real PTY without native modules.
+// macOS and Linux have different `script` syntax.
+const isDarwin = os.platform() === "darwin";
+const scriptArgs = isDarwin
+  ? ["-q", "/dev/null", "/bin/zsh", "-i", "-c", shellCmd]
+  : ["-qfc", shellCmd, "/dev/null"];
 
-child.onData((data) => {
-  process.stdout.write(data);
+const child = spawn("script", scriptArgs, {
+  stdio: ["pipe", "inherit", "inherit"],
+  env: process.env,
 });
 
 const interval = setInterval(() => {
   try {
-    child.write("1");
+    if (!child.stdin.destroyed) {
+      child.stdin.write("1");
+    }
   } catch {
     clearInterval(interval);
   }
 }, delay);
 
-child.onExit(({ exitCode }) => {
+child.on("error", (err) => {
   clearInterval(interval);
-  console.log(`\npress-one: Command exited with code ${exitCode}`);
-  process.exit(exitCode ?? 0);
+  console.error(`press-one: Failed to start command: ${err.message}`);
+  process.exit(1);
+});
+
+child.on("close", (code) => {
+  clearInterval(interval);
+  console.log(`\npress-one: Command exited with code ${code}`);
+  process.exit(code ?? 0);
 });
 
 process.on("SIGINT", () => {
@@ -93,9 +98,3 @@ process.on("SIGTERM", () => {
   clearInterval(interval);
   child.kill("SIGTERM");
 });
-
-if (process.stdout.isTTY) {
-  process.stdout.on("resize", () => {
-    child.resize(process.stdout.columns, process.stdout.rows);
-  });
-}
