@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 const pty = require("node-pty");
+const { execFileSync } = require("child_process");
 
 const args = process.argv.slice(2);
 
@@ -45,11 +46,20 @@ if (args.length === 0) {
   process.exit(1);
 }
 
+// Resolve command to full path since node-pty doesn't search PATH
+let command = args[0];
+try {
+  command = execFileSync("which", [args[0]], { encoding: "utf8" }).trim();
+} catch {
+  console.error(`press-one: Command not found: ${args[0]}`);
+  process.exit(1);
+}
+
 console.log(`press-one: Starting "${args.join(" ")}" with ${delay}ms delay`);
 console.log("press-one: Will press 1 every time input is needed.");
 console.log("press-one: Ctrl+C to stop before it's too late.\n");
 
-const child = pty.spawn(args[0], args.slice(1), {
+const child = pty.spawn(command, args.slice(1), {
   name: "xterm-256color",
   cols: process.stdout.columns || 80,
   rows: process.stdout.rows || 24,
