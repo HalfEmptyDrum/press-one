@@ -13,7 +13,7 @@ npm install -g press-one
 ## Usage
 
 ```bash
-press-one <command> [args...]
+press-one [--delay <ms>] <command> [args...]
 ```
 
 ### Options
@@ -38,13 +38,23 @@ press-one --delay 100 claude "refactor everything"
 
 ## How it works
 
-1. Spawns your command as a child process
-2. Pipes `1\n` into stdin on a loop
+1. Spawns your command in a pseudo-TTY (so it thinks it's a real terminal)
+2. Pipes `1` into stdin on a loop
 3. That's it. That's the whole thing.
+
+## Known "features"
+
+- **The 1s are always flowing.** While the command is thinking, you'll see a gentle stream of `11111` in the terminal. This is not a bug — it's a meditation on trust. You chose to press one. Now one presses itself.
+- **You can't type.** Stdin belongs to the machine now. If you need to intervene, `Ctrl+C` and start over like a person who reads diffs.
 
 ## Warning
 
 This will blindly accept **everything**. Use `--delay` to give yourself time to `Ctrl+C` before your repo becomes modern art.
+
+## Requirements
+
+- Node.js >= 16
+- Python 3 (used internally for PTY allocation — preinstalled on macOS and most Linux)
 
 ## License
 
