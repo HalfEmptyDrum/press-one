@@ -2,7 +2,7 @@
 
 Automatically presses `1` to accept changes. For the lazy and the brave.
 
-Born from the Claude Code workflow where you mash `1` to accept every change — now automated, so your fingers can rest while your repo burns.
+Born from the Claude Code workflow where you mash `1` to accept every change — now automated.
 
 ## Install
 
