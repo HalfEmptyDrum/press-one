@@ -1,0 +1,26 @@
+{
+  "name": "press-one",
+  "version": "1.0.0",
+  "description": "Automatically presses 1 to accept changes. For the lazy and the brave.",
+  "main": "index.js",
+  "bin": {
+    "press-one": "./bin/press-one.js"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "claude",
+    "claude-code",
+    "accept",
+    "auto-accept",
+    "press-one",
+    "yolo"
+  ],
+  "author": "HalfEmptyDrum",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/HalfEmptyDrum/press-one.git"
+  }
+}
